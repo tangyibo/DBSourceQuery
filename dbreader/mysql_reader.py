@@ -46,7 +46,7 @@ class ReaderMysql(ReaderBase):
         return tables
 
     # 获取mysql的建表语句, 原理：利用MySQL的 show create table 语句获取
-    def get_mysql_create_table_sql(self, curr_table_name, new_table_name=None, create_if_not_exist=False):
+    def get_mysql_create_table_sql_v1(self, curr_table_name, new_table_name=None, create_if_not_exist=False):
         mysql_cursor = self._connection.cursor()
 
         ######################
@@ -82,7 +82,7 @@ class ReaderMysql(ReaderBase):
         return True, create_table_sql, column_names, pri_key_columns
 
     # 获取mysql的建表语句, 原理：利用MySQL的 select * from  `table_name` limit 0 语句获取
-    def get_mysql_create_table_sql_v2(self, curr_table_name, new_table_name=None, create_if_not_exist=False):
+    def get_mysql_create_table_sql(self, curr_table_name, new_table_name=None, create_if_not_exist=False):
         mysql_cursor = self._connection.cursor()
 
         sql = "select * from  `%s` limit 0 " % curr_table_name
