@@ -58,7 +58,7 @@ class QueryTableInfoHandler(BaseHandler):
             charset=charset
         )
         reader.connect()
-        ret, create_table_sql, columns_names, key_columns_names = reader.get_mysql_create_table_sql_v2(src_table,
+        ret, create_table_sql, columns_names, key_columns_names = reader.get_mysql_create_table_sql(src_table,
                                                                                                     dest_table, True)
         reader.close()
 
