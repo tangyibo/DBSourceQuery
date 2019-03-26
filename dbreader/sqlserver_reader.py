@@ -153,7 +153,7 @@ class ReaderSqlserver(ReaderBase):
 
     def get_table_lists(self):
         cursor = self._connection.cursor()
-        sql = "SELECT Name FROM SysObjects Where XType='U'"
+        sql = "SELECT Name FROM SysObjects Where XType='U' or XType='V' "
 
         try:
             cursor.execute(sql)

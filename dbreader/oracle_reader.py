@@ -14,8 +14,13 @@ class ReaderOracle(ReaderBase):
 
     # 建立与oracle数据库的连接
     def connect(self):
-        tns = cx_Oracle.makedsn(self.host, self.port, sid=self.dbname, service_name=self.dbname)
-        self._connection = cx_Oracle.connect(self.username, self.password, tns, encoding="UTF-8", nencoding="UTF-8")
+        try:
+            tns = cx_Oracle.makedsn(self.host, self.port, sid=self.dbname)
+            self._connection = cx_Oracle.connect(self.username, self.password, tns, encoding="UTF-8", nencoding="UTF-8")
+        except cx_Oracle.OperationalError, e:
+            tns = cx_Oracle.makedsn(self.host, self.port, service_name=self.dbname)
+            self._connection = cx_Oracle.connect(self.username, self.password, tns, encoding="UTF-8", nencoding="UTF-8")
+
 
     # 关闭与Oracle的连接
     def close(self):
@@ -23,7 +28,7 @@ class ReaderOracle(ReaderBase):
 
     def get_table_lists(self):
         cursor = self._connection.cursor()
-        query_sql = "select table_name from user_tables "
+        query_sql = "select table_name from user_tables union all select view_name as table_name from user_views "
         try:
             cursor.execute(query_sql)
         except cx_Oracle.OperationalError, e:
