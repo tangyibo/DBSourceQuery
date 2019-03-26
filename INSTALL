@@ -1,0 +1,14 @@
+<<<<<<<<INSTALL>>>>>>>>>>>>>>>>
+1、安装Oralce客户端驱动
+  instantclient-basic-linux.x64-12.2.0.1.0.zip
+  instantclient-sdk-linux.x64-12.2.0.1.0.zip
+
+2、安装virtualenv环境
+  yum install python-virtualenv
+
+3、配置程序启动需要的虚拟环境
+mkdir -p /opt/DBSourceQuery
+virtualenv -p `which python2` /opt/DBSourceQuery/venv
+source /opt/DBSourceQuery/venv/bin/activate
+(venv)pip install --upgrade pip
+(venv)pip install -r requirements.txt
