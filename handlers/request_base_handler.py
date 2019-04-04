@@ -4,12 +4,15 @@
 #
 import tornado.web
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dbreader import *
 import sys
 sys.path.append("../")
 from logger_file import logger
 
 class BaseHandler(tornado.web.RequestHandler):
+    executor = ThreadPoolExecutor(20)
+
     dbmapper = {
         "mysql": ReaderMysql,
         "oracle": ReaderOracle,
@@ -31,7 +34,9 @@ class BaseHandler(tornado.web.RequestHandler):
         self.finish(result)
 
     def get(self):
+        logger.info("[Request-GET]:%s" % self.request.uri)
         self.response_json(None, 404, 'Not found!')
 
     def post(self):
+        logger.info("[Request-POST]:%s" % self.request.uri)
         self.response_json(None, 404, 'Not found!')

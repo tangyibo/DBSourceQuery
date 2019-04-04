@@ -3,6 +3,8 @@
 # Author: tang
 #
 import json
+import tornado
+from tornado.concurrent import run_on_executor
 from request_base_handler import BaseHandler
 import sys
 sys.path.append("..")
@@ -22,11 +24,15 @@ from logger_file import logger
 #     "dest_table":"my_test_table"
 # }
 #
+
+
 class QueryTableInfoHandler(BaseHandler):
 
     def get(self):
         self.response_json(None, -1, 'Not implements')
 
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
     def post(self):
         logger.info("request remote client id is %s ..." % self.request.remote_ip)
 
@@ -37,16 +43,21 @@ class QueryTableInfoHandler(BaseHandler):
 
         try:
             params = json.loads(self.request.body)
-            self.query_table_info(**params)
+            ret = yield self.query_table_info(**params)
+            self.response_json(ret)
         except Exception, e:
-            self.response_json(None, -1, 'error:%s' % e.message)
+            self.response_json(None, -1, 'error:%s' % str(e.message) )
         finally:
             pass
 
+    @run_on_executor
     def query_table_info(self, type, host, port, user, passwd, dbname, charset, src_table, dest_table):
 
+        if not isinstance(port, int):
+            raise Exception('Invalid database port,should be integer')
+
         if not BaseHandler.dbmapper.has_key(type):
-            self.response_json(None, -1, 'Not Support databse type :%s' % type)
+            raise Exception('Not Support databse type :%s' % type)
 
         dbclass = BaseHandler.dbmapper.get(type)
         reader = dbclass(
@@ -63,10 +74,10 @@ class QueryTableInfoHandler(BaseHandler):
         reader.close()
 
         if ret is not True:
-            self.response_json(None, -1, "failed,reason:%s" % create_table_sql)
+            raise Exception("failed,reason:%s" % create_table_sql)
 
         result = {}
         result['create_sql'] = create_table_sql
         result['columns'] = columns_names
         result['primary_key'] = key_columns_names
-        self.response_json(result)
+        return result

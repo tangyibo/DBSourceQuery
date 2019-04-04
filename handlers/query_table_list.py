@@ -4,6 +4,8 @@
 #
 import json
 from request_base_handler import BaseHandler
+import tornado
+from tornado.concurrent import run_on_executor
 import sys
 sys.path.append("..")
 from logger_file import logger
@@ -25,6 +27,8 @@ class QueryTableListHandler(BaseHandler):
     def get(self):
         self.response_json(None, -1, 'Not implements')
 
+    @tornado.web.asynchronous
+    @tornado.gen.coroutine
     def post(self):
         logger.info("request remote client id is %s ..." % self.request.remote_ip)
 
@@ -35,16 +39,20 @@ class QueryTableListHandler(BaseHandler):
 
         try:
             params = json.loads(self.request.body)
-            self.query_table_lists(**params)
+            ret=yield self.query_table_lists(**params)
+            self.response_json(ret)
         except Exception, e:
-            self.response_json(None, -1, 'error:%s' % e.message)
+            self.response_json(None, -1, 'error:%s' % str(e.message) )
         finally:
             pass
 
+    @run_on_executor
     def query_table_lists(self, type, host, port, user, passwd, dbname, charset):
+        if not isinstance(port,int):
+            raise Exception('Invalid database port,should be integer')
 
         if not BaseHandler.dbmapper.has_key(type):
-            self.response_json(None, -1, 'Not Support databse type :%s' % type)
+            raise Exception('Not Support databse type :%s' % type)
 
         dbclass = BaseHandler.dbmapper.get(type)
         reader = dbclass(
@@ -58,4 +66,4 @@ class QueryTableListHandler(BaseHandler):
         reader.connect()
         lists = reader.get_table_lists()
         reader.close()
-        self.response_json(lists)
+        return lists
