@@ -126,7 +126,7 @@ class ReaderOracle(ReaderBase):
             else:
                 nullable = "not null"
 
-            column_definitions.append("%s %s %s" % (column_name, column_type, nullable))
+            column_definitions.append("`%s` %s %s" % (column_name, column_type, nullable))
 
         create_table_sql += ",\n".join(column_definitions)
 
