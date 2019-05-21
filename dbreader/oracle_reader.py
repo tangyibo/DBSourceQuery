@@ -21,14 +21,13 @@ class ReaderOracle(ReaderBase):
             tns = cx_Oracle.makedsn(self.host, self.port, service_name=self.dbname)
             self._connection = cx_Oracle.connect(self.username, self.password, tns, encoding="UTF-8", nencoding="UTF-8")
 
-
     # 关闭与Oracle的连接
     def close(self):
         self._connection.close()
 
     def get_table_lists(self):
         cursor = self._connection.cursor()
-        query_sql = "select table_name from user_tables union all select view_name as table_name from user_views "
+        query_sql = "select table_name,'table' as table_type from user_tables union all select view_name as table_name,'view' as table_type from user_views "
         try:
             cursor.execute(query_sql)
         except cx_Oracle.OperationalError, e:
@@ -40,7 +39,7 @@ class ReaderOracle(ReaderBase):
 
         tables = []
         for item in cursor.fetchall():
-            tables.append(item[0])
+            tables.append({"table_name":item[0],"table_type":str(item[1]).strip()})
         cursor.close()
         return tables
 
@@ -99,19 +98,17 @@ class ReaderOracle(ReaderBase):
         column_definitions = []
 
         for column in table_metadata:
-            # 'LINES' is a MySQL reserved keyword
             column_name = column['name']
-            if column_name == "LINES":
-                column_name = "NUM_LINES"
-
             if column['type'] == cx_Oracle.NUMBER:
                 # column_type = "DECIMAL(%s, %s)" % (column['precision'], column['scale'])
                 column_type = "BIGINT"
             elif column['type'] == cx_Oracle.STRING:
-                if column['internal_size'] > 256:
-                    column_type = "TEXT"
-                else:
+                if column['internal_size'] <= 4000:
                     column_type = "VARCHAR(%s)" % (column['internal_size'],)
+                elif column['internal_size'] < 166777215:
+                    column_type = "MEDIUMTEXT"
+                else:
+                    column_type = "LONGTEXT"
             elif column['type'] == cx_Oracle.DATETIME:
                 column_type = "DATETIME"
             elif column['type'] == cx_Oracle.TIMESTAMP:
@@ -119,7 +116,10 @@ class ReaderOracle(ReaderBase):
             elif column['type'] == cx_Oracle.FIXED_CHAR:
                 column_type = "CHAR(%s)" % (column['internal_size'],)
             else:  # cx_Oracle.CLOB or cx_Oracle.BLOB
-                column_type = "TEXT"
+                if len(primary_key_column) > 0 and column_name in primary_key_column:
+                    column_type = "VARCHAR(255)"
+                else:
+                    column_type = "TEXT"
 
             if column['nullable'] == 1:
                 nullable = "null"

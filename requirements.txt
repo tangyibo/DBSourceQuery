@@ -4,3 +4,4 @@ pymysql
 cx_Oracle
 Cython
 pymssql
+pyinstaller

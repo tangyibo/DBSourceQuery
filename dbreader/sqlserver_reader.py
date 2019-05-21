@@ -153,7 +153,7 @@ class ReaderSqlserver(ReaderBase):
 
     def get_table_lists(self):
         cursor = self._connection.cursor()
-        sql = "SELECT Name FROM SysObjects Where XType='U' or XType='V' "
+        sql = "SELECT Name as table_name,XType as table_type FROM SysObjects Where XType='U' or XType='V' "
 
         try:
             cursor.execute(sql)
@@ -164,9 +164,10 @@ class ReaderSqlserver(ReaderBase):
         except Exception, e:
             raise Exception(e.message)
 
+        data_mapper={"U":"table","V":"view"}
         tables = []
         for item in cursor.fetchall():
-            tables.append(item[0])
+            tables.append({"table_name": item[0], "table_type": data_mapper[str(item[1]).strip()]})
         cursor.close()
         return tables
 
@@ -238,8 +239,9 @@ class ReaderSqlserver(ReaderBase):
     # 获取表的主键列信息
     def __query_table_primary_key(self, table_name):
         cursor = self._connection.cursor()
-        sql = "select CONSTRAINT_NAME from information_schema.TABLE_CONSTRAINTS where TABLE_NAME='%s' and CONSTRAINT_TYPE='PRIMARY KEY'" \
-              % table_name
+        # sql = "select CONSTRAINT_NAME from information_schema.TABLE_CONSTRAINTS where TABLE_NAME='%s' and CONSTRAINT_TYPE='PRIMARY KEY'" \
+        #      % table_name
+        sql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='%s'" % table_name
 
         try:
             cursor.execute(sql)
@@ -254,23 +256,6 @@ class ReaderSqlserver(ReaderBase):
         cursor.close()
         if not r:
             return None
-
-        constraint_name = r[0][0]
-        sql = "select COLUMN_NAME from information_schema.KEY_COLUMN_USAGE where TABLE_NAME='%s' and CONSTRAINT_NAME='%s'" \
-              % (table_name, constraint_name)
-
-        cursor = self._connection.cursor()
-        try:
-            cursor.execute(sql)
-        except pymssql.OperationalError, e:
-            self.connect()
-            cursor = self._connection.cursor()
-            cursor.execute(sql)
-        except Exception, e:
-            raise Exception(e.message)
-
-        r = cursor.fetchall()
-        cursor.close()
 
         ret = []
         if r:

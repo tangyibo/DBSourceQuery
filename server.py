@@ -9,6 +9,8 @@ from handlers import *
 import tornado.ioloop
 import tornado.web
 import tornado.httpserver
+import config
+import eureka_client.eureka_client as eureka_client
 
 
 class Application(tornado.web.Application):
@@ -28,9 +30,16 @@ if __name__ == '__main__':
     reload(sys)
     sys.setdefaultencoding('utf-8')
 
+    # register your server to eureka server and also start to send heartbeat every 30 seconds
+    eureka_client.init_registry_client(eureka_server=config.eureka_server,
+                                       app_name=config.app_name,
+                                       instance_port=config.listen_port,
+                                       home_page_url="",
+                                       status_page_url="",
+                                       health_check_url="")
     app = Application()
     server = tornado.httpserver.HTTPServer(app)
-    listen_port = 8088
-    server.listen(listen_port)
-    logger.info("start on port=%s ..." % listen_port)
+
+    server.listen(config.listen_port)
+    logger.info("start on port=%s ..." % config.listen_port)
     tornado.ioloop.IOLoop.instance().start()

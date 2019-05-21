@@ -29,7 +29,7 @@ class ReaderMysql(ReaderBase):
     # 获取MySQL中一个数据库内所有的表列表
     def get_table_lists(self):
         cursor = self._connection.cursor()
-        query_sql = "select table_name from information_schema.tables where table_schema='%s' " % self.dbname
+        query_sql = "select table_name,table_type from information_schema.tables where table_schema='%s' " % self.dbname
         try:
             cursor.execute(query_sql)
         except pymysql.OperationalError, e:
@@ -39,9 +39,10 @@ class ReaderMysql(ReaderBase):
         except Exception, e:
             return False, e.message, [], []
 
+        data_mapper = {"BASE TABLE": "table","base table": "table", "VIEW": "view"}
         tables = []
         for item in cursor.fetchall():
-            tables.append(item[0])
+            tables.append({"table_name": item[0], "table_type": data_mapper[str(item[1]).strip()]})
         cursor.close()
         return tables
 
@@ -140,16 +141,20 @@ class ReaderMysql(ReaderBase):
             if column['type'] == pymysql.NUMBER :
                 column_type = "BIGINT"
             elif column['type'] == pymysql.STRING:
-                if column['internal_size'] > 256:
-                    column_type = "TEXT"
-                else:
+                if column['internal_size'] < 256:
                     column_type = "VARCHAR(%s)" % (column['internal_size'],)
+                elif column['internal_size'] < 65535:
+                    column_type = "TEXT"
+                elif column['internal_size'] < 166777215:
+                    column_type = "MEDIUMTEXT"
+                else:
+                    column_type = "LONGTEXT"
             elif column['type'] == pymysql.TIMESTAMP:
                 column_type = "DATETIME"
             elif column['type'] == pymysql.TIME:
                 column_type = "TIMESTAMP"
             else:
-                column_type = "TEXT"
+                column_type = "LONGTEXT"
 
             if column['nullable'] == 1:
                 nullable = "null"
