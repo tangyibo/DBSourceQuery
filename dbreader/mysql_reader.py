@@ -19,15 +19,21 @@ class ReaderMysql(ReaderBase):
             port=self.port,
             db=self.dbname,
             user=self.username,
-            passwd=self.password,
-            charset='utf8')
+            password=self.password,
+            charset='utf8',
+            connect_timeout=10
+            )
 
     # 关闭与MySQL的连接
     def close(self):
         self._connection.close()
 
+    # 获取数据库内所有的模式列表
+    def get_model_lists(self):
+        return ["default"]
+
     # 获取MySQL中一个数据库内所有的表列表
-    def get_table_lists(self):
+    def get_table_lists(self,model_name=None):
         cursor = self._connection.cursor()
         query_sql = "select table_name,table_type from information_schema.tables where table_schema='%s' " % self.dbname
         try:
@@ -47,7 +53,7 @@ class ReaderMysql(ReaderBase):
         return tables
 
     # 获取mysql的建表语句, 原理：利用MySQL的 show create table 语句获取
-    def get_mysql_create_table_sql_v1(self, curr_table_name, new_table_name=None, create_if_not_exist=False):
+    def get_mysql_create_table_sql_v1(self, model_name, curr_table_name, new_table_name=None, create_if_not_exist=False):
         mysql_cursor = self._connection.cursor()
 
         ######################
@@ -83,7 +89,7 @@ class ReaderMysql(ReaderBase):
         return True, create_table_sql, column_names, pri_key_columns
 
     # 获取mysql的建表语句, 原理：利用MySQL的 select * from  `table_name` limit 0 语句获取
-    def get_mysql_create_table_sql(self, curr_table_name, new_table_name=None, create_if_not_exist=False):
+    def get_mysql_create_table_sql(self, model_name, curr_table_name, new_table_name=None, create_if_not_exist=False):
         mysql_cursor = self._connection.cursor()
 
         sql = "select * from  `%s` limit 0 " % curr_table_name
@@ -99,7 +105,6 @@ class ReaderMysql(ReaderBase):
         table_metadata = []
         columns_names = []
         for column in mysql_cursor.description:
-            print mysql_cursor.description
             columns_names.append(column[0])
             table_metadata.append({
                 'name': column[0],
@@ -141,7 +146,9 @@ class ReaderMysql(ReaderBase):
             if column['type'] == pymysql.NUMBER :
                 column_type = "BIGINT"
             elif column['type'] == pymysql.STRING:
-                if column['internal_size'] < 256:
+                if len(primary_key_column) > 0 and column_name in primary_key_column:
+                    column_type = "VARCHAR(255)"
+                elif column['internal_size'] < 256:
                     column_type = "VARCHAR(%s)" % (column['internal_size'],)
                 elif column['internal_size'] < 65535:
                     column_type = "TEXT"

@@ -19,6 +19,7 @@ from logger_file import logger
 #     "user":"yi_bo",
 #     "passwd":"yi_bo",
 #     "dbname":"orcl",
+#     "model":"sys",
 #     "charset":"utf-8",
 #     "src_table":"TEST_TABLE",
 #     "dest_table":"my_test_table"
@@ -43,6 +44,19 @@ class QueryTableInfoHandler(BaseHandler):
 
         try:
             params = json.loads(self.request.body)
+
+            if not params.has_key('model'):
+                if params.has_key('type') and params['type']=='mysql':
+                    params['model'] = "default"
+                elif params.has_key('type') and params['type']=='mssql':
+                    params['model'] = "dbo"
+                elif params.has_key('type') and params['type']=='oracle':
+                    params['model'] = params['user']
+                elif params.has_key('type') and params['type'] == 'postgresql':
+                    params['model'] ="public"
+                else:
+                    pass
+
             ret = yield self.query_table_info(**params)
             self.response_json(ret)
         except Exception, e:
@@ -51,7 +65,7 @@ class QueryTableInfoHandler(BaseHandler):
             pass
 
     @run_on_executor
-    def query_table_info(self, type, host, port, user, passwd, dbname, charset, src_table, dest_table):
+    def query_table_info(self, type, host, port, user, passwd, dbname, model,charset, src_table, dest_table):
 
         if not isinstance(port, int):
             raise Exception('Invalid database port,should be integer')
@@ -69,7 +83,7 @@ class QueryTableInfoHandler(BaseHandler):
             charset=charset
         )
         reader.connect()
-        ret, create_table_sql, columns_names, key_columns_names = reader.get_mysql_create_table_sql(src_table,
+        ret, create_table_sql, columns_names, key_columns_names = reader.get_mysql_create_table_sql(model, src_table,
                                                                                                     dest_table, True)
         reader.close()
 

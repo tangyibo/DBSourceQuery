@@ -21,12 +21,16 @@ class ReaderBase(object):
     def close(self):
         pass
 
+    # 获取数据库内所有的模式列表
+    def get_model_lists(self):
+        pass
+
     # 获取数据库内所有的表列表
-    def get_table_lists(self):
+    def get_table_lists(self,model_name):
         pass
 
     # 获取表的创建语句
-    def get_mysql_create_table_sql(self, curr_table_name, new_table_name=None):
+    def get_mysql_create_table_sql(self, model_name, curr_table_name, new_table_name=None):
         return False, "not implement", None
 
     #############################################

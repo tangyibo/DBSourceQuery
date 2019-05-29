@@ -10,13 +10,15 @@ import sys
 sys.path.append("../")
 from logger_file import logger
 
+
 class BaseHandler(tornado.web.RequestHandler):
     executor = ThreadPoolExecutor(20)
 
     dbmapper = {
         "mysql": ReaderMysql,
         "oracle": ReaderOracle,
-        "mssql": ReaderSqlserver
+        "mssql": ReaderSqlserver,
+        "postgresql":ReaderPostgresql
     }
 
     def respose_html(self, data):

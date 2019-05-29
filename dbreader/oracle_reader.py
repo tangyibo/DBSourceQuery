@@ -25,12 +25,38 @@ class ReaderOracle(ReaderBase):
     def close(self):
         self._connection.close()
 
-    def get_table_lists(self):
+    # 获取数据库内所有的模式列表
+    def get_model_lists(self):
         cursor = self._connection.cursor()
-        query_sql = "select table_name,'table' as table_type from user_tables union all select view_name as table_name,'view' as table_type from user_views "
+        query_sql = "select DISTINCT USERNAME from all_users"
         try:
             cursor.execute(query_sql)
-        except cx_Oracle.OperationalError, e:
+        except cx_Oracle.OperationalError as e:
+            self.connect()
+            cursor = self._connection.cursor()
+            cursor.execute(query_sql)
+        except Exception, e:
+            raise Exception(e.message)
+
+        models = []
+        for item in cursor.fetchall():
+            models.append(item[0])
+        cursor.close()
+        return models
+
+    # 获取数据库内所有的表列表
+    def get_table_lists(self, model_name=None):
+        if model_name is None:
+            model_name=self.username
+
+        cursor = self._connection.cursor()
+        query_sql = "select table_name,'table' as table_type from ALL_TABLES WHERE OWNER='%s' \
+                    union all \
+                    select view_name as table_name,'view' as table_type from ALL_VIEWS WHERE OWNER='%s' " \
+                    % (model_name.upper(), model_name.upper())
+        try:
+            cursor.execute(query_sql)
+        except cx_Oracle.OperationalError as e:
             self.connect()
             cursor = self._connection.cursor()
             cursor.execute(query_sql)
@@ -44,17 +70,17 @@ class ReaderOracle(ReaderBase):
         return tables
 
     # 获取oracle的建表语句,原理：利用Oracle的 SELECT * FROM table where rownum<1 语句获取列名信息
-    def get_mysql_create_table_sql(self, curr_table_name, new_table_name=None, create_if_not_exist=False):
+    def get_mysql_create_table_sql(self, model_name, curr_table_name, new_table_name=None, create_if_not_exist=False):
         oracle_cursor = self._connection.cursor()
 
-        sql = "SELECT * FROM %s where rownum<1" % curr_table_name
+        sql = "SELECT * FROM \"%s\".\"%s\" where rownum<1" % (model_name.upper(), curr_table_name)
         try:
             oracle_cursor.execute(sql)
-        except cx_Oracle.OperationalError, e:
+        except cx_Oracle.OperationalError as e:
             self.connect()
             oracle_cursor = self._connection.cursor()
             oracle_cursor.execute(sql)
-        except Exception, e:
+        except Exception as e:
             return False, e.message, [], []
 
         table_metadata = []
@@ -78,7 +104,7 @@ class ReaderOracle(ReaderBase):
 
         try:
             # 获取主键列信息
-            primary_key_column = self.__query_table_primary_key(curr_table_name)
+            primary_key_column = self.__query_table_primary_key(model_name, curr_table_name)
         except Exception, e:
             return False, e.message, []
 
@@ -100,8 +126,10 @@ class ReaderOracle(ReaderBase):
         for column in table_metadata:
             column_name = column['name']
             if column['type'] == cx_Oracle.NUMBER:
-                # column_type = "DECIMAL(%s, %s)" % (column['precision'], column['scale'])
-                column_type = "BIGINT"
+                if(0==column['scale']):
+                    column_type = "BIGINT"
+                else:
+                    column_type = "DECIMAL(%s, 4)" % (column['precision'])
             elif column['type'] == cx_Oracle.STRING:
                 if column['internal_size'] <= 4000:
                     column_type = "VARCHAR(%s)" % (column['internal_size'],)
@@ -138,12 +166,12 @@ class ReaderOracle(ReaderBase):
         return True, create_table_sql, columns_names, primary_key_column
 
     # 获取表的主键列信息
-    def __query_table_primary_key(self, table_name):
+    def __query_table_primary_key(self, model_name, table_name):
         oracle_cursor = self._connection.cursor()
 
-        sql = "SELECT COLUMN_NAME FROM user_cons_columns WHERE	constraint_name = \
+        sql = "SELECT COLUMN_NAME FROM user_cons_columns WHERE 	owner='%s' and 	constraint_name = \
         (SELECT constraint_name FROM user_constraints WHERE table_name = '%s' AND \
-        constraint_type = 'P') " % table_name.upper()
+        constraint_type = 'P') " % (model_name.upper(), table_name.upper())
         try:
             oracle_cursor.execute(sql)
         except cx_Oracle.OperationalError, e:

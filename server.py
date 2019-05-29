@@ -16,6 +16,7 @@ import eureka_client.eureka_client as eureka_client
 class Application(tornado.web.Application):
     def __init__(self):
         handlers = [
+            (r'/query_model_list', QueryModelListHandler),
             (r'/query_table_list', QueryTableListHandler),
             (r'/query_table_info', QueryTableInfoHandler),
             (r'.*', BaseHandler)

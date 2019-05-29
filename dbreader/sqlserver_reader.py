@@ -145,15 +145,37 @@ class ReaderSqlserver(ReaderBase):
     def connect(self):
         params = {'server': self.host, 'port': self.port, 'database': self.dbname,
                   'user': self.username, 'password': self.password, }
-        self._connection = pymssql.connect(timeout=90, **params)
+        self._connection = pymssql.connect(login_timeout=30,timeout=90, **params)
 
     # 关闭与SQLServer的连接
     def close(self):
         pass
 
-    def get_table_lists(self):
+    # 获取数据库内所有的模式列表
+    def get_model_lists(self):
         cursor = self._connection.cursor()
-        sql = "SELECT Name as table_name,XType as table_type FROM SysObjects Where XType='U' or XType='V' "
+        sql = "select name from sys.schemas where schema_id<16000"
+
+        try:
+            cursor.execute(sql)
+        except pymssql.OperationalError, e:
+            self.connect()
+            cursor = self._connection.cursor()
+            cursor.execute(sql)
+        except Exception, e:
+            raise Exception(e.message)
+
+        models = []
+        for item in cursor.fetchall():
+            models.append(item[0])
+        cursor.close()
+        return models
+
+    # 获取数据库内所有的表列表
+    def get_table_lists(self, model_name="dbo"):
+        cursor = self._connection.cursor()
+        #sql = "SELECT Name as table_name,XType as table_type FROM SysObjects Where XType='U' or XType='V' "
+        sql = "SELECT  s.name as table_name,s.XType as table_type FROM INFORMATION_SCHEMA.TABLES t, SysObjects s where t.table_name=s.name and table_schema='%s'" % model_name
 
         try:
             cursor.execute(sql)
@@ -172,14 +194,14 @@ class ReaderSqlserver(ReaderBase):
         return tables
 
     # 获取SQLServer的建表语句,原理：利用SQLServer的三个SQL获取表的列、主键、索引信息，然后生成MySQL的建表语句
-    def get_mysql_create_table_sql(self, curr_table_name, new_table_name=None, create_if_not_exist=False):
+    def get_mysql_create_table_sql(self, model_name, curr_table_name, new_table_name=None, create_if_not_exist=False):
 
         try:
             # 获取列信息
-            columns = self.__query_table_columns(curr_table_name)
+            columns = self.__query_table_columns(model_name, curr_table_name)
 
             # 获取主键列信息
-            primary_key_column = self.__query_table_primary_key(curr_table_name)
+            primary_key_column = self.__query_table_primary_key(model_name, curr_table_name)
         except Exception, e:
             return False, e.message, [], []
 
@@ -219,9 +241,10 @@ class ReaderSqlserver(ReaderBase):
         return True, create_table_sql, columns_names, primary_key_column
 
     # 获取表的列信息
-    def __query_table_columns(self, table_name):
+    def __query_table_columns(self, model_name, table_name):
         cursor = self._connection.cursor()
-        sql = "select *, COLUMNPROPERTY(object_id(TABLE_NAME), COLUMN_NAME, 'IsIdentity') as IS_IDENTITY from information_schema.COLUMNS where TABLE_NAME='%s'" % table_name
+        sql = "select *, COLUMNPROPERTY(object_id(TABLE_NAME), COLUMN_NAME, 'IsIdentity') as IS_IDENTITY \
+         from information_schema.COLUMNS where TABLE_NAME='%s' and TABLE_SCHEMA='%s'" % (table_name, model_name)
 
         try:
             cursor.execute(sql)
@@ -237,11 +260,10 @@ class ReaderSqlserver(ReaderBase):
         return columns
 
     # 获取表的主键列信息
-    def __query_table_primary_key(self, table_name):
+    def __query_table_primary_key(self, model_name, table_name):
         cursor = self._connection.cursor()
-        # sql = "select CONSTRAINT_NAME from information_schema.TABLE_CONSTRAINTS where TABLE_NAME='%s' and CONSTRAINT_TYPE='PRIMARY KEY'" \
-        #      % table_name
-        sql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='%s'" % table_name
+        sql = "SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE WHERE TABLE_NAME='%s' and CONSTRAINT_SCHEMA='%s' " % (
+        table_name, model_name)
 
         try:
             cursor.execute(sql)

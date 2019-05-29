@@ -2,6 +2,7 @@ setuptools
 tornado
 pymysql
 cx_Oracle
+psycopg2-binary
 Cython
 pymssql
 pyinstaller

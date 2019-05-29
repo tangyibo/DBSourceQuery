@@ -19,6 +19,7 @@ from logger_file import logger
 #     "user":"tangyibo",
 #     "passwd":"tangyibo",
 #     "dbname":"school_data",
+#     "model":"default",
 #     "charset":"utf-8"
 # }
 #
@@ -39,6 +40,19 @@ class QueryTableListHandler(BaseHandler):
 
         try:
             params = json.loads(self.request.body)
+
+            if not params.has_key('model'):
+                if params.has_key('type') and params['type']=='mysql':
+                    params['model']="default"
+                elif params.has_key('type') and params['type']=='mssql':
+                    params['model'] = "dbo"
+                elif params.has_key('type') and params['type']=='oracle':
+                    params['model'] = params['user']
+                elif params.has_key('type') and params['type'] == 'postgresql':
+                    params['model'] ="public"
+                else:
+                    pass
+
             ret=yield self.query_table_lists(**params)
             self.response_json(ret)
         except Exception, e:
@@ -47,8 +61,8 @@ class QueryTableListHandler(BaseHandler):
             pass
 
     @run_on_executor
-    def query_table_lists(self, type, host, port, user, passwd, dbname, charset):
-        if not isinstance(port,int):
+    def query_table_lists(self, type, host, port, user, passwd, dbname, model, charset):
+        if not isinstance(port, int):
             raise Exception('Invalid database port,should be integer')
 
         if not BaseHandler.dbmapper.has_key(type):
@@ -64,6 +78,6 @@ class QueryTableListHandler(BaseHandler):
             charset=charset
         )
         reader.connect()
-        lists = reader.get_table_lists()
+        lists = reader.get_table_lists(model)
         reader.close()
         return lists

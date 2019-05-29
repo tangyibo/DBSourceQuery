@@ -2,6 +2,7 @@
 
 1、安装virtualenv环境
   yum install python-virtualenv
+  yum install python-psycopg2
 
 2、配置程序启动需要的虚拟环境
   cd DBSourceQuery/
