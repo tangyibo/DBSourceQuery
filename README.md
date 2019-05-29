@@ -1,10 +1,10 @@
-#数据库信息查询服务
+# 数据库信息查询服务
 
-##一、功能描述
+## 一、功能描述
 
 　　通过给定的数据库连接信息获取所有的表列信息、主键信息、及在MySQL中对应的建表语句等
  
-##二、支持的数据库
+## 二、支持的数据库
 
 | 数据库名称 | 数据库英文 | 简写 | 数据库类型 |
 | :------:| :------: | :------: | :------: |
@@ -14,30 +14,30 @@
 | PostgreSQL | PostgreSQL | postgresql | 关系数据库 |
 
 ## 三、安装部署
-###1、安装virtualenv环境
+### 1、安装virtualenv环境
 ```
   yum install python-virtualenv
   yum install python-psycopg2
 ```
-###2、配置程序启动需要的虚拟环境
+### 2、配置程序启动需要的虚拟环境
 ```
   cd DBSourceQuery/
   virtualenv -p `which python` venv
   ./venv/bin/pip install -r requirements.txt
 ```
-###3、编译生成可执行文件
+### 3、编译生成可执行文件
 ```
   make
 ```
-###4、测试运行
+### 4、测试运行
 ```
  cd bin/
  ./dbSourceQuery 或者 ./startup.sh
 ```
 
-##四、接口文档
+## 四、接口文档
 
- ###1、获取数据库中所有的模式(model/schema)
+ ### 1、获取数据库中所有的模式(model/schema)
  
  **URI:** http://host:port/query_model_list
  
@@ -91,7 +91,7 @@
 }
 ```
 
- ###2、获取数据库中指定模式下的所有表
+ ### 2、获取数据库中指定模式下的所有表
  **URI:** http://host:port/query_table_list
  
  **Request Method:** POST
@@ -153,7 +153,7 @@
 }
 ```
 
- ###3、获取业务数据库中指定表的相关信息
+ ### 3、获取业务数据库中指定表的相关信息
  
  **URI:** http://host:port/query_table_info
  
