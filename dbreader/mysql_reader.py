@@ -21,7 +21,8 @@ class ReaderMysql(ReaderBase):
             user=self.username,
             password=self.password,
             charset='utf8',
-            connect_timeout=10
+            connect_timeout=4,
+            read_timeout=5
             )
 
     # 关闭与MySQL的连接
@@ -30,7 +31,7 @@ class ReaderMysql(ReaderBase):
 
     # 获取数据库内所有的模式列表
     def get_model_lists(self):
-        return ["default"]
+        return [self.dbname]
 
     # 获取MySQL中一个数据库内所有的表列表
     def get_table_lists(self,model_name=None):

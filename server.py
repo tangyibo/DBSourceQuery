@@ -31,13 +31,17 @@ if __name__ == '__main__':
     reload(sys)
     sys.setdefaultencoding('utf-8')
 
-    # register your server to eureka server and also start to send heartbeat every 30 seconds
-    eureka_client.init_registry_client(eureka_server=config.eureka_server,
-                                       app_name=config.app_name,
-                                       instance_port=config.listen_port,
-                                       home_page_url="",
-                                       status_page_url="",
-                                       health_check_url="")
+    if config.eureka_enable:
+        # register your server to eureka server and also start to send heartbeat every 30 seconds
+        eureka_client.init_registry_client(eureka_server=config.eureka_server,
+                                           app_name=config.app_name,
+                                           instance_port=config.listen_port,
+                                           home_page_url="",
+                                           status_page_url="",
+                                           health_check_url="")
+    else:
+        pass
+
     app = Application()
     server = tornado.httpserver.HTTPServer(app)
 

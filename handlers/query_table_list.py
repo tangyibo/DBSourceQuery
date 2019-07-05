@@ -55,8 +55,8 @@ class QueryTableListHandler(BaseHandler):
 
             ret=yield self.query_table_lists(**params)
             self.response_json(ret)
-        except Exception, e:
-            self.response_json(None, -1, 'error:%s' % str(e.message) )
+        except Exception as e:
+            self.response_json(None, -1, 'error:%s' % str(e.args) )
         finally:
             pass
 

@@ -5,7 +5,6 @@ import os
 
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.UTF8'
 
-
 class ReaderOracle(ReaderBase):
 
     # 构造函数
@@ -18,8 +17,13 @@ class ReaderOracle(ReaderBase):
             tns = cx_Oracle.makedsn(self.host, self.port, sid=self.dbname)
             self._connection = cx_Oracle.connect(self.username, self.password, tns, encoding="UTF-8", nencoding="UTF-8")
         except cx_Oracle.OperationalError, e:
-            tns = cx_Oracle.makedsn(self.host, self.port, service_name=self.dbname)
-            self._connection = cx_Oracle.connect(self.username, self.password, tns, encoding="UTF-8", nencoding="UTF-8")
+            try:
+                tns = cx_Oracle.makedsn(self.host, self.port, service_name=self.dbname)
+                self._connection = cx_Oracle.connect(self.username, self.password, tns, encoding="UTF-8", nencoding="UTF-8")
+            except cx_Oracle.DatabaseError as e:
+                raise Exception(e.args[0].message)
+        except cx_Oracle.DatabaseError as e:
+            raise Exception(e.args[0].message)
 
     # 关闭与Oracle的连接
     def close(self):
@@ -126,10 +130,13 @@ class ReaderOracle(ReaderBase):
         for column in table_metadata:
             column_name = column['name']
             if column['type'] == cx_Oracle.NUMBER:
-                if(0==column['scale']):
+                if 0==column['scale'] :
                     column_type = "BIGINT"
                 else:
-                    column_type = "DECIMAL(%s, 4)" % (column['precision'])
+                    if column['precision']>4 and  column['precision']<=64 :
+                        column_type = "DECIMAL(%s, 4)" % (column['precision'])
+                    else:
+                        column_type = "DECIMAL(10, 4)"
             elif column['type'] == cx_Oracle.STRING:
                 if column['internal_size'] <= 4000:
                     column_type = "VARCHAR(%s)" % (column['internal_size'],)
@@ -143,7 +150,11 @@ class ReaderOracle(ReaderBase):
                 column_type = "TIMESTAMP"
             elif column['type'] == cx_Oracle.FIXED_CHAR:
                 column_type = "CHAR(%s)" % (column['internal_size'],)
-            else:  # cx_Oracle.CLOB or cx_Oracle.BLOB
+            elif column['type'] == cx_Oracle.CLOB:
+                column_type = "LONGBLOB"
+            elif column['type'] == cx_Oracle.BLOB:
+                column_type = "LONGBLOB"
+            else:
                 if len(primary_key_column) > 0 and column_name in primary_key_column:
                     column_type = "VARCHAR(255)"
                 else:

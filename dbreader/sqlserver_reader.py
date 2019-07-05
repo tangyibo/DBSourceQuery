@@ -144,8 +144,8 @@ class ReaderSqlserver(ReaderBase):
     # 建立与SQLServer数据库的连接
     def connect(self):
         params = {'server': self.host, 'port': self.port, 'database': self.dbname,
-                  'user': self.username, 'password': self.password, }
-        self._connection = pymssql.connect(login_timeout=30,timeout=90, **params)
+                  'user': self.username, 'password': self.password}
+        self._connection = pymssql.connect(login_timeout=5, timeout=10, **params)
 
     # 关闭与SQLServer的连接
     def close(self):

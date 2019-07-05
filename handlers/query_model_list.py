@@ -42,7 +42,7 @@ class QueryModelListHandler(BaseHandler):
             ret=yield self.query_model_lists(**params)
             self.response_json(ret)
         except Exception as e:
-            self.response_json(None, -1, 'error:%s' % str(e.message) )
+            self.response_json(None, -1, 'error:%s' % str(e.args) )
         finally:
             pass
 
