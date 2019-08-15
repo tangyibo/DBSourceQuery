@@ -83,9 +83,11 @@ class QueryTableInfoHandler(BaseHandler):
             charset=charset
         )
         reader.connect()
-        ret, create_table_sql, columns_names, key_columns_names = reader.get_mysql_create_table_sql(model, src_table,
+        try:
+            ret, create_table_sql, columns_names, key_columns_names = reader.get_mysql_create_table_sql(model, src_table,
                                                                                                     dest_table, True)
-        reader.close()
+        finally:
+            reader.close()
 
         if ret is not True:
             raise Exception("failed,reason:%s" % create_table_sql)

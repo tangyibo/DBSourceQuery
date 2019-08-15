@@ -177,17 +177,18 @@
 **Request Example:**
 
 ```
- {
+{
     "type":"oracle",  
     "host":"172.16.90.252",
     "port":1521,
     "user":"yi_bo",
     "passwd":"yi_bo",
     "dbname":"orcl",
-    "model":"ODI",
+    "model":"YI_BO",
     "charset":"utf-8",
-    "src_table":"TEST_TABLE",
+    "src_table":"C_SEX",
     "dest_table":"my_test_table"
+}
 }
 ```
  
@@ -201,32 +202,103 @@
 | create_sql | string | 建表的SQL语句 | MySQL数据库语法的建表SQL语句 |
 | primary_key | list | 表的主键列 | 表的主键字段列表 |
 | columns | list | 表的字段列 | 表的字段列表 |
+| name | string | 字段列名称 | 表的字段列表 |
+| type | string | 字段列类型 | 表的字段列表 |
+| nullable | integer | 是否可为空 | 取值：1-是；0-否 |
+| display_size | integer | 显示长度 | 显示长度 |
+| precision | integer | Number precision | Number precision |
+| scale | integer | Number scale | Number scale  |
+| internal_size | integer | 内部字节大小 | 内部字节大小 |
 
  **Response Example:**
  
 ```
 {
-    "data":{ 
-        "create_sql":"CREATE TABLE IF NOT EXISTS `my_test_table` (
-                        ID BIGINT not null,
-                        NAME VARCHAR(50) null,
-                        AGE BIGINT null,
-                        PHONE VARCHAR(20) null,
-                        EMAIL VARCHAR(255) null,
-                        PRIMARY KEY (`ID`)
-                     )ENGINE=InnoDB DEFAULT CHARACTER SET = utf8;",
-        "primary_key":[
-            "ID"
+    "data": {
+        "create_sql": "CREATE TABLE IF NOT EXISTS `my_test_table` (\n`id` BIGINT not null,\n`name` TEXT null,\n`value` TEXT null,\nPRIMARY KEY (`id`)\n)ENGINE=InnoDB DEFAULT CHARACTER SET = utf8;",
+        "primary_key": [
+            "id"
         ],
-        "columns":[
-            "ID",
-            "NAME",
-            "AGE",
-            "PHONE",
-            "EMAIL"
+        "columns": [
+            {
+                "scale": 0,
+                "name": "id",
+                "nullable": 0,
+                "type": "NUMBER",
+                "display_size": 12,
+                "precision": 11,
+                "internal_size": null
+            },
+            {
+                "scale": null,
+                "name": "name",
+                "nullable": 1,
+                "type": "NVARCHAR2",
+                "display_size": 255,
+                "precision": null,
+                "internal_size": 1020
+            },
+            {
+                "scale": null,
+                "name": "value",
+                "nullable": 1,
+                "type": "NVARCHAR2",
+                "display_size": 255,
+                "precision": null,
+                "internal_size": 1020
+            }
         ]
     },
-    "errcode":0,  
-    "errmsg":"ok" 
+    "errcode": 0,
+    "errmsg": "ok"
+}
+```
+
+### 4、测试指定数据库中sql有效性
+ **URI:** http://host:port/query_sql_test
+ 
+ **Request Method:** POST
+ 
+ **Request Format:** JOSN格式
+ 
+| 字段名称 | 类型 | 描述 | 取值范围 |
+| :------:| :------: | :------: | :------ |
+| type | string | 数据库类型 | 可取值：oracle,mysql,mssql,postgresql |
+| host | string | IP地址 | 数据库主机的IP地址 |
+| port | integer | 端口号 | 整型的端口号 |
+| user | string | 帐号 | 登录的帐号名 |
+| passwd | string | 密码 | 登录的密码 |
+| dbname | string | 库名 | 连接的数据库名称 |
+| charset | string | 字符集 | 数据库的字符集|
+| querysql | string | SQL语句 | 待验证的合法SQL|
+
+**Request Example:**
+
+```
+ {
+    "type":"oracle",
+    "host":"172.16.90.252",
+    "port":1521,
+    "user":"yi_bo",
+    "passwd":"yi_bo",
+    "dbname":"orcl",
+    "querysql":"select * from test",
+    "charset":"utf-8"
+}
+```
+
+ **Response Format:** JOSN格式
+ 
+| 字段名称 | 类型 | 描述 | 取值范围 |
+| :------:| :------: | :------: | :------ |
+| errcode | integer | 错误码 | 0为成功，其他为失败 |
+| errmsg | string | 错误信息 | 当errcode=0时，为"ok",否则为错误的详细信息 |
+
+**Response Example:**
+
+```
+{
+    "errcode":0,            
+    "errmsg":"ok"           
 }
 ```

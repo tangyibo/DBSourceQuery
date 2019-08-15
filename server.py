@@ -19,6 +19,7 @@ class Application(tornado.web.Application):
             (r'/query_model_list', QueryModelListHandler),
             (r'/query_table_list', QueryTableListHandler),
             (r'/query_table_info', QueryTableInfoHandler),
+            (r'/query_sql_test', QuerySqlTestHandler),
             (r'.*', BaseHandler)
         ]
         settings = dict(

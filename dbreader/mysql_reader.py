@@ -4,7 +4,7 @@ import pymysql
 from warnings import filterwarnings
 
 filterwarnings("error", category=pymysql.Warning)
-
+filterwarnings('ignore', category = pymysql.Warning)
 
 class ReaderMysql(ReaderBase):
 
@@ -21,8 +21,8 @@ class ReaderMysql(ReaderBase):
             user=self.username,
             password=self.password,
             charset='utf8',
-            connect_timeout=4,
-            read_timeout=5
+            connect_timeout=20,
+            read_timeout=20
             )
 
     # 关闭与MySQL的连接
@@ -44,7 +44,7 @@ class ReaderMysql(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(query_sql)
         except Exception, e:
-            return False, e.message, [], []
+            return False, str(e.args), [], []
 
         data_mapper = {"BASE TABLE": "table","base table": "table", "VIEW": "view"}
         tables = []
@@ -53,78 +53,16 @@ class ReaderMysql(ReaderBase):
         cursor.close()
         return tables
 
-    # 获取mysql的建表语句, 原理：利用MySQL的 show create table 语句获取
-    def get_mysql_create_table_sql_v1(self, model_name, curr_table_name, new_table_name=None, create_if_not_exist=False):
-        mysql_cursor = self._connection.cursor()
-
-        ######################
-        # 生成创建表的SQL语句
-        ######################
-
-        show_create_table_sql = "show create table %s " % curr_table_name
-        try:
-            mysql_cursor.execute(show_create_table_sql)
-        except pymysql.OperationalError, e:
-            self.connect()
-            mysql_cursor = self._connection.cursor()
-            mysql_cursor.execute(show_create_table_sql)
-        except Exception, e:
-            return False, e.message, []
-
-        results = mysql_cursor.fetchone()
-        if new_table_name is None:
-            create_table_sql = results[1]
-        else:
-            create_table_sql = results[1].replace(curr_table_name, new_table_name)
-
-        mysql_cursor.close()
-
-        if create_if_not_exist is True:
-            create_table_sql = create_table_sql.replace('CREATE TABLE', 'CREATE TABLE IF NOT EXISTS ')
-
-        # remove the current time field
-        create_table_sql = create_table_sql.replace('ON UPDATE CURRENT_TIMESTAMP', ' ')
-
-        column_names = self.__query_table_columns(curr_table_name)
-        pri_key_columns = self.__query_table_primary_key(curr_table_name)
-        return True, create_table_sql, column_names, pri_key_columns
-
     # 获取mysql的建表语句, 原理：利用MySQL的 select * from  `table_name` limit 0 语句获取
     def get_mysql_create_table_sql(self, model_name, curr_table_name, new_table_name=None, create_if_not_exist=False):
-        mysql_cursor = self._connection.cursor()
-
-        sql = "select * from  `%s` limit 0 " % curr_table_name
-        try:
-            mysql_cursor.execute(sql)
-        except pymysql.OperationalError, e:
-            self.connect()
-            mysql_cursor = self._connection.cursor()
-            mysql_cursor.execute(sql)
-        except Exception, e:
-            return False, e.message, []
-
-        table_metadata = []
-        columns_names = []
-        for column in mysql_cursor.description:
-            columns_names.append(column[0])
-            table_metadata.append({
-                'name': column[0],
-                'type': column[1],
-                'display_size': column[2],
-                'internal_size': column[3],
-                'precision': column[4],
-                'scale': column[5],
-                'nullable': column[6],
-            })
-
-        mysql_cursor.close()
 
         try:
+            # 获取列元信息
+            column_metadata = self.__query_table_columns(curr_table_name)
             # 获取主键列信息
             primary_key_column = self.__query_table_primary_key(curr_table_name)
         except Exception, e:
-            return False, e.message, []
-
+            return False, str(e.args), []
 
         ######################
         # 生成创建表的SQL语句
@@ -141,33 +79,25 @@ class ReaderMysql(ReaderBase):
 
         column_definitions = []
 
-        for column in table_metadata:
-            column_name = column['name']
+        table_metadata=[]
+        for metadata in column_metadata:
+            table_metadata.append({
+                'name': metadata[0],
+                'type': metadata[1],
+                'display_size': metadata[2],
+                'internal_size': metadata[3],
+                'precision': metadata[4],
+                'scale': metadata[5],
+                'nullable': 1 if metadata[6] == "YES" else 0,
+            })
 
-            if column['type'] == pymysql.NUMBER :
-                column_type = "BIGINT"
-            elif column['type'] == pymysql.STRING:
-                if len(primary_key_column) > 0 and column_name in primary_key_column:
-                    column_type = "VARCHAR(255)"
-                elif column['internal_size'] < 256:
-                    column_type = "VARCHAR(%s)" % (column['internal_size'],)
-                elif column['internal_size'] < 65535:
-                    column_type = "TEXT"
-                elif column['internal_size'] < 166777215:
-                    column_type = "MEDIUMTEXT"
-                else:
-                    column_type = "LONGTEXT"
-            elif column['type'] == pymysql.TIMESTAMP:
-                column_type = "DATETIME"
-            elif column['type'] == pymysql.TIME:
-                column_type = "TIMESTAMP"
-            else:
-                column_type = "LONGTEXT"
+            column_name = metadata[0]
+            column_type = metadata[7]
 
-            if column['nullable'] == 1:
-                nullable = "null"
-            else:
-                nullable = "not null"
+            #if column[0] == 'YES':
+            nullable = "null"
+            #else:
+            #    nullable = "not null"
 
             column_definitions.append("`%s` %s %s" % (column_name, column_type, nullable))
 
@@ -178,13 +108,23 @@ class ReaderMysql(ReaderBase):
             create_table_sql += ',\nPRIMARY KEY (%s)' % primary_key_column_fields
         create_table_sql += "\n)ENGINE=InnoDB DEFAULT CHARACTER SET = utf8;"
 
-        return True, create_table_sql, columns_names, primary_key_column
+        return True, create_table_sql, table_metadata, primary_key_column
 
+    # 测试SQL有效性
+    def test_query_sql(self, query_sql):
+        cursor = self._connection.cursor()
+        sql = 'explain %s' % (query_sql.replace(";", ""),)
+        try:
+            cursor.execute(sql)
+        except Warning, w:
+            pass
+        except Exception, e:
+            raise Exception(str(e.args))
 
     # 获取表的列信息
     def __query_table_columns(self, table_name):
         cursor = self._connection.cursor()
-        sql = "select column_name,data_type from information_schema.COLUMNS where TABLE_SCHEMA='%s' and TABLE_NAME='%s'" % (
+        sql = "select COLUMN_NAME,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH,CHARACTER_OCTET_LENGTH,NUMERIC_PRECISION,NUMERIC_SCALE,IS_NULLABLE,COLUMN_TYPE from information_schema.COLUMNS where TABLE_SCHEMA='%s' and TABLE_NAME='%s'" % (
             self.dbname, table_name)
 
         try:
@@ -194,17 +134,11 @@ class ReaderMysql(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(str(e.args))
 
         r = cursor.fetchall()
         cursor.close()
-
-        ret = []
-        if r:
-            for item in r:
-                ret.append(item[0])
-
-        return ret
+        return r
 
     # 获取表的主键列
     def __query_table_primary_key(self, table_name):
@@ -219,7 +153,7 @@ class ReaderMysql(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(str(e.args))
 
         r=cursor.fetchall()
         cursor.close()

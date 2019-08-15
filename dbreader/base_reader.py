@@ -33,6 +33,9 @@ class ReaderBase(object):
     def get_mysql_create_table_sql(self, model_name, curr_table_name, new_table_name=None):
         return False, "not implement", None
 
+    # 测试SQL有效性
+    def test_query_sql(self, query_sql):
+        pass
     #############################################
 
     # 装饰器 host

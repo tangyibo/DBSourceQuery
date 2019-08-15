@@ -145,7 +145,7 @@ class ReaderSqlserver(ReaderBase):
     def connect(self):
         params = {'server': self.host, 'port': self.port, 'database': self.dbname,
                   'user': self.username, 'password': self.password}
-        self._connection = pymssql.connect(login_timeout=5, timeout=10, **params)
+        self._connection = pymssql.connect(login_timeout=20, timeout=20, **params)
 
     # 关闭与SQLServer的连接
     def close(self):
@@ -163,7 +163,7 @@ class ReaderSqlserver(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(str(e.args))
 
         models = []
         for item in cursor.fetchall():
@@ -174,7 +174,6 @@ class ReaderSqlserver(ReaderBase):
     # 获取数据库内所有的表列表
     def get_table_lists(self, model_name="dbo"):
         cursor = self._connection.cursor()
-        #sql = "SELECT Name as table_name,XType as table_type FROM SysObjects Where XType='U' or XType='V' "
         sql = "SELECT  s.name as table_name,s.XType as table_type FROM INFORMATION_SCHEMA.TABLES t, SysObjects s where t.table_name=s.name and table_schema='%s'" % model_name
 
         try:
@@ -184,7 +183,7 @@ class ReaderSqlserver(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(str(e.args))
 
         data_mapper={"U":"table","V":"view"}
         tables = []
@@ -203,7 +202,7 @@ class ReaderSqlserver(ReaderBase):
             # 获取主键列信息
             primary_key_column = self.__query_table_primary_key(model_name, curr_table_name)
         except Exception, e:
-            return False, e.message, [], []
+            return False, str(e.args), [], []
 
         ######################
         # 生成创建表的SQL语句
@@ -216,10 +215,19 @@ class ReaderSqlserver(ReaderBase):
             table_name = new_table_name
 
         cols = []
-        columns_names = []
+        table_metadata = []
         auto_increment_column = None
         for col in columns:
-            columns_names.append(col[ColumnDesc.COLUMN_NAME])
+            table_metadata.append({
+                'name': col[ColumnDesc.COLUMN_NAME],
+                'type': col[ColumnDesc.DATA_TYPE],
+                'display_size': col[ColumnDesc.CHARACTER_MAXIMUM_LENGTH],
+                'internal_size': col[ColumnDesc.CHARACTER_OCTET_LENGTH],
+                'precision': col[ColumnDesc.NUMERIC_PRECISION],
+                'scale': col[ColumnDesc.NUMERIC_SCALE],
+                'nullable': 1 if col[ColumnDesc.IS_NULLABLE] == "YES" else 0,
+            })
+
             cols.append("`%s` %s %s%s" % (col[ColumnDesc.COLUMN_NAME],
                                           get_column_type(col),
                                           convert_column_default(col),
@@ -238,7 +246,20 @@ class ReaderSqlserver(ReaderBase):
             create_table_sql = 'CREATE TABLE `%s` (\n%s) ENGINE=InnoDB DEFAULT CHARSET=utf8' % (
                 table_name, ',\n'.join(cols))
 
-        return True, create_table_sql, columns_names, primary_key_column
+        return True, create_table_sql, table_metadata, primary_key_column
+
+    # 测试SQL有效性
+    def test_query_sql(self, query_sql):
+        cursor = self._connection.cursor()
+        #sql = "SELECT top 1 * from ( %s ) tmp" % (query_sql.replace(";", ""),)
+        try:
+            cursor.execute("SET SHOWPLAN_ALL ON")
+            cursor.execute(query_sql)
+        except Exception, e:
+            raise Exception(str(e.args))
+        finally:
+            cursor.execute("SET SHOWPLAN_ALL OFF")
+
 
     # 获取表的列信息
     def __query_table_columns(self, model_name, table_name):
@@ -253,7 +274,7 @@ class ReaderSqlserver(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(str(e.args))
 
         columns = list(cursor.fetchall())
         cursor.close()
@@ -272,7 +293,7 @@ class ReaderSqlserver(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(str(e.args))
 
         r = cursor.fetchall()
         cursor.close()

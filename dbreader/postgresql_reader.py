@@ -35,7 +35,7 @@ class ReaderPostgresql(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(query_sql)
         except Exception as e:
-            return False, e.message, [], []
+            return False, str(e.args), [], []
 
         models = []
         for item in cursor.fetchall():
@@ -57,7 +57,7 @@ class ReaderPostgresql(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(query_sql)
         except Exception, e:
-            return False, e.message, [], []
+            return False, str(e.args), [], []
 
         tables = []
         for item in cursor.fetchall():
@@ -77,12 +77,10 @@ class ReaderPostgresql(ReaderBase):
             mysql_cursor = self._connection.cursor()
             mysql_cursor.execute(sql)
         except Exception, e:
-            return False, e.message, []
+            return False, str(e.args), []
 
         table_metadata = []
-        columns_names = []
         for column in postgres_cursor.description:
-            columns_names.append(column[0])
             table_metadata.append({
                 'name': column[0],
                 'type': column[1],
@@ -92,14 +90,13 @@ class ReaderPostgresql(ReaderBase):
                 'scale': column[5],
                 'nullable': column[6],
             })
-            print table_metadata
             postgres_cursor.close()
 
         try:
             # 获取主键列信息
             primary_key_column = self.__query_table_primary_key(model_name, curr_table_name)
         except Exception as e:
-            return False, e.message, []
+            return False, str(e.args), []
 
 
         ######################
@@ -154,7 +151,19 @@ class ReaderPostgresql(ReaderBase):
             create_table_sql += ',\nPRIMARY KEY (%s)' % primary_key_column_fields
         create_table_sql += "\n)ENGINE=InnoDB DEFAULT CHARACTER SET = utf8;"
 
-        return True, create_table_sql, columns_names, primary_key_column
+        for metadata in table_metadata:
+            metadata['type']=str(metadata['type'])
+
+        return True, create_table_sql, table_metadata, primary_key_column
+
+    # 测试SQL有效性
+    def test_query_sql(self, query_sql):
+        cursor = self._connection.cursor()
+        sql = "EXPLAIN  %s" % (query_sql.replace(";", ""))
+        try:
+            cursor.execute(sql)
+        except Exception, e:
+            raise Exception(str(e.args))
 
     # 获取表的主键列
     def __query_table_primary_key(self, model_name, table_name):
@@ -172,7 +181,7 @@ class ReaderPostgresql(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(str(e.args))
 
         r=cursor.fetchall()
         cursor.close()

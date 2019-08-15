@@ -5,6 +5,29 @@ import os
 
 os.environ['NLS_LANG'] = 'SIMPLIFIED CHINESE_CHINA.UTF8'
 
+TYPES_MAP = {
+    cx_Oracle.BFILE: 'BFILE',
+    cx_Oracle.NATIVE_FLOAT: 'BINARY_DOUBLE',
+    cx_Oracle.BLOB: 'BLOB',
+    cx_Oracle.FIXED_CHAR: 'CHAR',
+    cx_Oracle.CLOB: 'CLOB',
+    cx_Oracle.CURSOR: 'CURSOR',
+    cx_Oracle.DATETIME: 'DATE',
+    cx_Oracle.INTERVAL: 'INTERVAL DAY TO SECOND',
+    cx_Oracle.LONG_STRING: 'LONG',
+    cx_Oracle.LONG_BINARY: 'LONG RAW',
+    cx_Oracle.FIXED_NCHAR: 'NCHAR',
+    cx_Oracle.NCLOB: 'NCLOB',
+    cx_Oracle.NUMBER: 'NUMBER',
+    cx_Oracle.NCHAR: 'NVARCHAR2',
+    cx_Oracle.OBJECT: 'OBJECT',
+    cx_Oracle.BINARY: 'RAW',
+    cx_Oracle.ROWID: 'ROWID',
+    cx_Oracle.TIMESTAMP: 'TIMESTAMP',
+    cx_Oracle.NATIVE_FLOAT: 'BINARY_FLOAT',
+    cx_Oracle.STRING: 'VARCHAR2'
+}
+
 class ReaderOracle(ReaderBase):
 
     # 构造函数
@@ -40,7 +63,7 @@ class ReaderOracle(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(query_sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(e.args[0].message)
 
         models = []
         for item in cursor.fetchall():
@@ -65,7 +88,7 @@ class ReaderOracle(ReaderBase):
             cursor = self._connection.cursor()
             cursor.execute(query_sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(e.args[0].message)
 
         tables = []
         for item in cursor.fetchall():
@@ -85,15 +108,13 @@ class ReaderOracle(ReaderBase):
             oracle_cursor = self._connection.cursor()
             oracle_cursor.execute(sql)
         except Exception as e:
-            return False, e.message, [], []
+            return False, e.args[0].message, [], []
 
         table_metadata = []
-        columns_names = []
         # "The description is a list of 7-item tuples where each tuple
         # consists of a column name, column type, display size, internal size,
         # precision, scale and whether null is possible."
         for column in oracle_cursor.description:
-            columns_names.append(column[0])
             table_metadata.append({
                 'name': column[0],
                 'type': column[1],
@@ -110,7 +131,7 @@ class ReaderOracle(ReaderBase):
             # 获取主键列信息
             primary_key_column = self.__query_table_primary_key(model_name, curr_table_name)
         except Exception, e:
-            return False, e.message, []
+            return False, e.args[0].message, []
 
         ######################
         # 生成创建表的SQL语句
@@ -133,13 +154,17 @@ class ReaderOracle(ReaderBase):
                 if 0==column['scale'] :
                     column_type = "BIGINT"
                 else:
-                    if column['precision']>4 and  column['precision']<=64 :
-                        column_type = "DECIMAL(%s, 4)" % (column['precision'])
+                    if column['precision'] > 4 and column['precision'] <= 64 and column['precision'] > column['scale']:
+                        column_type = "DECIMAL(%s, %s)" % (column['precision'], column['scale'])
                     else:
-                        column_type = "DECIMAL(10, 4)"
+                        column_type = "DECIMAL(65, 4)"
             elif column['type'] == cx_Oracle.STRING:
-                if column['internal_size'] <= 4000:
+                if len(primary_key_column) > 0 and column_name in primary_key_column:
+                    column_type = "VARCHAR(254)"
+                elif column['internal_size'] <= 128:
                     column_type = "VARCHAR(%s)" % (column['internal_size'],)
+                elif column['internal_size'] <= 65535:
+                    column_type = "TEXT"
                 elif column['internal_size'] < 166777215:
                     column_type = "MEDIUMTEXT"
                 else:
@@ -174,7 +199,21 @@ class ReaderOracle(ReaderBase):
             create_table_sql += ',\nPRIMARY KEY (%s)' % primary_key_column_fields
         create_table_sql += "\n)ENGINE=InnoDB DEFAULT CHARACTER SET = utf8;"
 
-        return True, create_table_sql, columns_names, primary_key_column
+        for metadata in table_metadata:
+            metadata['type']=TYPES_MAP[metadata['type']]
+
+        return True, create_table_sql, table_metadata, primary_key_column
+
+    # 测试SQL有效性
+    def test_query_sql(self, query_sql):
+        oracle_cursor = self._connection.cursor()
+
+        sql = "explain plan for %s" % (query_sql.replace(";", ""),)
+        try:
+            oracle_cursor.execute(sql)
+        except Exception, e:
+            raise Exception(e.args[0].message)
+
 
     # 获取表的主键列信息
     def __query_table_primary_key(self, model_name, table_name):
@@ -190,7 +229,7 @@ class ReaderOracle(ReaderBase):
             oracle_cursor = self._connection.cursor()
             oracle_cursor.execute(sql)
         except Exception, e:
-            raise Exception(e.message)
+            raise Exception(e.args[0].message)
 
         r = oracle_cursor.fetchall()
         oracle_cursor.close()

@@ -78,6 +78,9 @@ class QueryTableListHandler(BaseHandler):
             charset=charset
         )
         reader.connect()
-        lists = reader.get_table_lists(model)
-        reader.close()
+        try:
+            lists = reader.get_table_lists(model)
+        finally:
+            reader.close()
+
         return lists

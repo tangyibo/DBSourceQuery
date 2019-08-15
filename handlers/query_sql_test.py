@@ -1,5 +1,5 @@
 # -*- coding: UTF-8 -*-
-# Date: 2018-12-29
+# Date: 2019-08-14
 # Author: tang
 #
 import json
@@ -19,10 +19,13 @@ from logger_file import logger
 #     "user":"tangyibo",
 #     "passwd":"tangyibo",
 #     "dbname":"school_data",
+#     "querysql":"select * from test",
 #     "charset":"utf-8"
 # }
 #
-class QueryModelListHandler(BaseHandler):
+
+
+class QuerySqlTestHandler(BaseHandler):
 
     def get(self):
         self.response_json(None, -1, 'Not implements')
@@ -39,16 +42,16 @@ class QueryModelListHandler(BaseHandler):
 
         try:
             params = json.loads(self.request.body)
-            ret=yield self.query_model_lists(**params)
+            ret =yield self.query_sql_test(**params)
             self.response_json(ret)
         except Exception as e:
-            self.response_json(None, -1, 'error:%s' % str(e.args) )
+            self.response_json(None, -1, 'error:%s' % str(e.args))
         finally:
             pass
 
     @run_on_executor
-    def query_model_lists(self, type, host, port, user, passwd, dbname, charset):
-        if not isinstance(port,int):
+    def query_sql_test(self, type, host, port, user, passwd, dbname, charset, querysql):
+        if not isinstance(port, int):
             raise Exception('Invalid database port,should be integer')
 
         if not BaseHandler.dbmapper.has_key(type):
@@ -65,8 +68,8 @@ class QueryModelListHandler(BaseHandler):
         )
         reader.connect()
         try:
-            lists = reader.get_model_lists()
+            reader.test_query_sql(querysql)
         finally:
             reader.close()
 
-        return lists
+        return None
