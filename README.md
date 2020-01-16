@@ -14,6 +14,9 @@
 | PostgreSQL | PostgreSQL | postgresql | 关系数据库 |
 
 ## 三、安装部署
+
+开发环境：python2.7 / CentOS7
+
 ### 1、安装virtualenv环境
 ```
   yum install python-virtualenv
