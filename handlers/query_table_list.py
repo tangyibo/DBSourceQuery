@@ -80,6 +80,9 @@ class QueryTableListHandler(BaseHandler):
         reader.connect()
         try:
             lists = reader.get_table_lists(model)
+        except Exception as e:
+            logger.exception(e)
+            raise e
         finally:
             reader.close()
 

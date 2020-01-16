@@ -4,5 +4,5 @@ pymysql
 cx_Oracle
 psycopg2-binary
 Cython
-pymssql
+pymssql<3.0
 pyinstaller

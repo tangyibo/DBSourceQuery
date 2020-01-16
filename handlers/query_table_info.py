@@ -7,6 +7,7 @@ import tornado
 from tornado.concurrent import run_on_executor
 from request_base_handler import BaseHandler
 import sys
+import traceback
 sys.path.append("..")
 from logger_file import logger
 
@@ -86,6 +87,10 @@ class QueryTableInfoHandler(BaseHandler):
         try:
             ret, create_table_sql, columns_names, key_columns_names = reader.get_mysql_create_table_sql(model, src_table,
                                                                                                     dest_table, True)
+            lists = reader.get_table_lists(model)
+        except Exception as e:
+            logger.exception(e)
+            raise e
         finally:
             reader.close()
 
@@ -93,6 +98,11 @@ class QueryTableInfoHandler(BaseHandler):
             raise Exception("failed,reason:%s" % create_table_sql)
 
         result = {}
+        for item in lists:
+            if item['table_name'] == src_table:
+                result['metadata'] = item
+                break
+
         result['create_sql'] = create_table_sql
         result['columns'] = columns_names
         result['primary_key'] = key_columns_names

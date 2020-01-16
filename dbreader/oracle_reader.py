@@ -74,13 +74,12 @@ class ReaderOracle(ReaderBase):
     # 获取数据库内所有的表列表
     def get_table_lists(self, model_name=None):
         if model_name is None:
-            model_name=self.username
+            model_name = self.username
 
         cursor = self._connection.cursor()
-        query_sql = "select table_name,'table' as table_type from ALL_TABLES WHERE OWNER='%s' \
-                    union all \
-                    select view_name as table_name,'view' as table_type from ALL_VIEWS WHERE OWNER='%s' " \
-                    % (model_name.upper(), model_name.upper())
+        query_sql = '''
+                    SELECT "TABLE_NAME","TABLE_TYPE","COMMENTS" from all_tab_comments where "OWNER"='%s' 
+                    ''' % model_name.upper()
         try:
             cursor.execute(query_sql)
         except cx_Oracle.OperationalError as e:
@@ -92,13 +91,19 @@ class ReaderOracle(ReaderBase):
 
         tables = []
         for item in cursor.fetchall():
-            tables.append({"table_name":item[0],"table_type":str(item[1]).strip()})
+            if "VIEW" == str(item[1]).strip().upper():
+                tables.append({"table_name": item[0], "table_type": "view", "remarks": item[2]})
+            else:
+                tables.append({"table_name": item[0], "table_type": "table", "remarks": item[2]})
         cursor.close()
         return tables
 
     # 获取oracle的建表语句,原理：利用Oracle的 SELECT * FROM table where rownum<1 语句获取列名信息
     def get_mysql_create_table_sql(self, model_name, curr_table_name, new_table_name=None, create_if_not_exist=False):
         oracle_cursor = self._connection.cursor()
+
+        primary_key_column = self.__query_table_primary_key(model_name, curr_table_name)
+        column_remarks = self.__query_table_column_remarks(curr_table_name, model_name)
 
         sql = "SELECT * FROM \"%s\".\"%s\" where rownum<1" % (model_name.upper(), curr_table_name)
         try:
@@ -108,7 +113,7 @@ class ReaderOracle(ReaderBase):
             oracle_cursor = self._connection.cursor()
             oracle_cursor.execute(sql)
         except Exception as e:
-            return False, e.args[0].message, [], []
+            raise e
 
         table_metadata = []
         # "The description is a list of 7-item tuples where each tuple
@@ -123,15 +128,10 @@ class ReaderOracle(ReaderBase):
                 'precision': column[4],
                 'scale': column[5],
                 'nullable': column[6],
+                'remarks': column_remarks[column[0]] if column_remarks.has_key(column[0]) else ''
             })
 
         oracle_cursor.close()
-
-        try:
-            # 获取主键列信息
-            primary_key_column = self.__query_table_primary_key(model_name, curr_table_name)
-        except Exception, e:
-            return False, e.args[0].message, []
 
         ######################
         # 生成创建表的SQL语句
@@ -151,7 +151,7 @@ class ReaderOracle(ReaderBase):
         for column in table_metadata:
             column_name = column['name']
             if column['type'] == cx_Oracle.NUMBER:
-                if 0==column['scale'] :
+                if 0==column['scale'] or 0==column['precision']:
                     column_type = "BIGINT"
                 else:
                     if column['precision'] > 4 and column['precision'] <= 64 and column['precision'] > column['scale']:
@@ -161,8 +161,9 @@ class ReaderOracle(ReaderBase):
             elif column['type'] == cx_Oracle.STRING:
                 if len(primary_key_column) > 0 and column_name in primary_key_column:
                     column_type = "VARCHAR(254)"
-                elif column['internal_size'] <= 128:
-                    column_type = "VARCHAR(%s)" % (column['internal_size'],)
+                elif column['internal_size'] <= 201:
+                    column_type = "VARCHAR(%s)" % (
+                    column['internal_size'] if column['internal_size'] is not None else 64,)
                 elif column['internal_size'] <= 65535:
                     column_type = "TEXT"
                 elif column['internal_size'] < 166777215:
@@ -174,7 +175,12 @@ class ReaderOracle(ReaderBase):
             elif column['type'] == cx_Oracle.TIMESTAMP:
                 column_type = "TIMESTAMP"
             elif column['type'] == cx_Oracle.FIXED_CHAR:
-                column_type = "CHAR(%s)" % (column['internal_size'],)
+                if column['internal_size'] is None or column['internal_size'] <= 0:
+                    column_type = "CHAR(64)"
+                elif column['internal_size'] <= 255:
+                    column_type = "CHAR(%s)" % (column['internal_size'],)
+                else:
+                    column_type = "TEXT"
             elif column['type'] == cx_Oracle.CLOB:
                 column_type = "LONGBLOB"
             elif column['type'] == cx_Oracle.BLOB:
@@ -183,14 +189,10 @@ class ReaderOracle(ReaderBase):
                 if len(primary_key_column) > 0 and column_name in primary_key_column:
                     column_type = "VARCHAR(255)"
                 else:
-                    column_type = "TEXT"
+                    column_type = "LONGTEXT"
 
-            if column['nullable'] == 1:
-                nullable = "null"
-            else:
-                nullable = "not null"
-
-            column_definitions.append("`%s` %s %s" % (column_name, column_type, nullable))
+            column_definitions.append("`%s` %s %s" % (
+                column_name, column_type, " NOT NULL" if column_name in primary_key_column else ' NULL'))
 
         create_table_sql += ",\n".join(column_definitions)
 
@@ -206,14 +208,15 @@ class ReaderOracle(ReaderBase):
 
     # 测试SQL有效性
     def test_query_sql(self, query_sql):
-        oracle_cursor = self._connection.cursor()
+        cursor = self._connection.cursor()
 
         sql = "explain plan for %s" % (query_sql.replace(";", ""),)
         try:
-            oracle_cursor.execute(sql)
+            cursor.execute(sql)
         except Exception, e:
             raise Exception(e.args[0].message)
-
+        finally:
+            cursor.close()
 
     # 获取表的主键列信息
     def __query_table_primary_key(self, model_name, table_name):
@@ -238,5 +241,30 @@ class ReaderOracle(ReaderBase):
         if r:
             for item in r:
                 ret.append(item[0])
+
+        return ret
+
+    # 获取表的字段中文注释
+    def __query_table_column_remarks(self, table_name, model_name):
+        oracle_cursor = self._connection.cursor()
+        sql = "select COLUMN_NAME,COMMENTS from all_col_comments where OWNER='%s' and TABLE_NAME='%s'" % (
+            model_name, table_name)
+
+        try:
+            oracle_cursor.execute(sql)
+        except cx_Oracle.OperationalError, e:
+            self.connect()
+            oracle_cursor = self._connection.cursor()
+            oracle_cursor.execute(sql)
+        except Exception, e:
+            raise Exception(e.args[0].message)
+
+        r = oracle_cursor.fetchall()
+        oracle_cursor.close()
+
+        ret = {}
+        if r:
+            for item in r:
+                ret[item[0]] = item[1]
 
         return ret

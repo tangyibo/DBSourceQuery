@@ -36,7 +36,7 @@ class ReaderMysql(ReaderBase):
     # 获取MySQL中一个数据库内所有的表列表
     def get_table_lists(self,model_name=None):
         cursor = self._connection.cursor()
-        query_sql = "select table_name,table_type from information_schema.tables where table_schema='%s' " % self.dbname
+        query_sql = "SELECT `TABLE_NAME`,`TABLE_TYPE`,`TABLE_COMMENT` FROM `information_schema`.`TABLES` where `TABLE_SCHEMA`='%s' " % self.dbname
         try:
             cursor.execute(query_sql)
         except pymysql.OperationalError, e:
@@ -46,23 +46,25 @@ class ReaderMysql(ReaderBase):
         except Exception, e:
             return False, str(e.args), [], []
 
-        data_mapper = {"BASE TABLE": "table","base table": "table", "VIEW": "view"}
         tables = []
         for item in cursor.fetchall():
-            tables.append({"table_name": item[0], "table_type": data_mapper[str(item[1]).strip()]})
+            if "VIEW" == str(item[1]).strip().upper():
+                tables.append({"table_name": item[0], "table_type": "view", "remarks": item[2]})
+            else:
+                tables.append({"table_name": item[0], "table_type": "table", "remarks": item[2]})
         cursor.close()
         return tables
 
-    # 获取mysql的建表语句, 原理：利用MySQL的 select * from  `table_name` limit 0 语句获取
+    # 获取mysql的建表语句
     def get_mysql_create_table_sql(self, model_name, curr_table_name, new_table_name=None, create_if_not_exist=False):
 
-        try:
-            # 获取列元信息
-            column_metadata = self.__query_table_columns(curr_table_name)
-            # 获取主键列信息
-            primary_key_column = self.__query_table_primary_key(curr_table_name)
-        except Exception, e:
-            return False, str(e.args), []
+        # 获取列元信息
+        column_metadata = self.__query_table_columns(curr_table_name)
+        if len(column_metadata) == 0:
+            raise Exception('table name is invalid!')
+
+        # 获取主键列信息
+        primary_key_column = self.__query_table_primary_key(curr_table_name)
 
         ######################
         # 生成创建表的SQL语句
@@ -89,17 +91,14 @@ class ReaderMysql(ReaderBase):
                 'precision': metadata[4],
                 'scale': metadata[5],
                 'nullable': 1 if metadata[6] == "YES" else 0,
+                'remarks' : metadata[8]
             })
 
             column_name = metadata[0]
             column_type = metadata[7]
 
-            #if column[0] == 'YES':
-            nullable = "null"
-            #else:
-            #    nullable = "not null"
-
-            column_definitions.append("`%s` %s %s" % (column_name, column_type, nullable))
+            column_definitions.append("`%s` %s %s" % (
+                column_name, column_type, " NOT NULL" if column_name in primary_key_column else ' NULL'))
 
         create_table_sql += ",\n".join(column_definitions)
 
@@ -120,11 +119,13 @@ class ReaderMysql(ReaderBase):
             pass
         except Exception, e:
             raise Exception(str(e.args))
+        finally:
+            cursor.close()
 
     # 获取表的列信息
     def __query_table_columns(self, table_name):
         cursor = self._connection.cursor()
-        sql = "select COLUMN_NAME,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH,CHARACTER_OCTET_LENGTH,NUMERIC_PRECISION,NUMERIC_SCALE,IS_NULLABLE,COLUMN_TYPE from information_schema.COLUMNS where TABLE_SCHEMA='%s' and TABLE_NAME='%s'" % (
+        sql = "select COLUMN_NAME,DATA_TYPE,CHARACTER_MAXIMUM_LENGTH,CHARACTER_OCTET_LENGTH,NUMERIC_PRECISION,NUMERIC_SCALE,IS_NULLABLE,COLUMN_TYPE,COLUMN_COMMENT from information_schema.COLUMNS where TABLE_SCHEMA='%s' and TABLE_NAME='%s'" % (
             self.dbname, table_name)
 
         try:

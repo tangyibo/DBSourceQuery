@@ -69,6 +69,9 @@ class QuerySqlTestHandler(BaseHandler):
         reader.connect()
         try:
             reader.test_query_sql(querysql)
+        except Exception as e:
+            logger.exception(e)
+            raise e
         finally:
             reader.close()
 

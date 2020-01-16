@@ -173,9 +173,10 @@ class ReaderSqlserver(ReaderBase):
 
     # 获取数据库内所有的表列表
     def get_table_lists(self, model_name="dbo"):
-        cursor = self._connection.cursor()
-        sql = "SELECT  s.name as table_name,s.XType as table_type FROM INFORMATION_SCHEMA.TABLES t, SysObjects s where t.table_name=s.name and table_schema='%s'" % model_name
+        remarks = self.__query_table_remarks(model_name)
 
+        cursor = self._connection.cursor()
+        sql = ''' SELECT [table_name],[table_type] FROM [INFORMATION_SCHEMA].[TABLES] where [table_schema]='%s' ''' % model_name
         try:
             cursor.execute(sql)
         except pymssql.OperationalError, e:
@@ -185,24 +186,29 @@ class ReaderSqlserver(ReaderBase):
         except Exception, e:
             raise Exception(str(e.args))
 
-        data_mapper={"U":"table","V":"view"}
         tables = []
         for item in cursor.fetchall():
-            tables.append({"table_name": item[0], "table_type": data_mapper[str(item[1]).strip()]})
+            if "VIEW" == str(item[1]).strip().upper():
+                tables.append({"table_name": item[0], "table_type": "view",
+                               "remarks": remarks[item[0]] if remarks.has_key(item[0]) else ''})
+            else:
+                tables.append({"table_name": item[0], "table_type": "table",
+                               "remarks": remarks[item[0]] if remarks.has_key(item[0]) else ''})
         cursor.close()
         return tables
 
-    # 获取SQLServer的建表语句,原理：利用SQLServer的三个SQL获取表的列、主键、索引信息，然后生成MySQL的建表语句
+    # 获取SQLServer的建表语句,原理：利用SQLServer的三个SQL获取表的列、主键信息，然后生成MySQL的建表语句
     def get_mysql_create_table_sql(self, model_name, curr_table_name, new_table_name=None, create_if_not_exist=False):
 
-        try:
-            # 获取列信息
-            columns = self.__query_table_columns(model_name, curr_table_name)
+        # 获取列信息
+        columns = self.__query_table_columns(model_name, curr_table_name)
+        if len(columns) == 0:
+            raise Exception('table name or schema name is invalid!')
 
-            # 获取主键列信息
-            primary_key_column = self.__query_table_primary_key(model_name, curr_table_name)
-        except Exception, e:
-            return False, str(e.args), [], []
+        # 获取主键列信息
+        primary_key_column = self.__query_table_primary_key(model_name, curr_table_name)
+
+        column_remarks = self.__query_table_column_remarks(curr_table_name, model_name)
 
         ######################
         # 生成创建表的SQL语句
@@ -226,12 +232,14 @@ class ReaderSqlserver(ReaderBase):
                 'precision': col[ColumnDesc.NUMERIC_PRECISION],
                 'scale': col[ColumnDesc.NUMERIC_SCALE],
                 'nullable': 1 if col[ColumnDesc.IS_NULLABLE] == "YES" else 0,
+                'remarks': column_remarks[col[ColumnDesc.COLUMN_NAME]] if column_remarks.has_key(
+                    col[ColumnDesc.COLUMN_NAME]) else ''
             })
 
             cols.append("`%s` %s %s%s" % (col[ColumnDesc.COLUMN_NAME],
                                           get_column_type(col),
                                           convert_column_default(col),
-                                          " NOT NULL" if col[ColumnDesc.IS_NULLABLE] == 'NO' else ''))
+                                          " NOT NULL" if col[ColumnDesc.COLUMN_NAME] in primary_key_column else ' NULL'))
             auto_increment_column = col[ColumnDesc.COLUMN_NAME] if col[
                 ColumnDesc.IS_IDENTITY] else auto_increment_column
 
@@ -251,14 +259,15 @@ class ReaderSqlserver(ReaderBase):
     # 测试SQL有效性
     def test_query_sql(self, query_sql):
         cursor = self._connection.cursor()
-        #sql = "SELECT top 1 * from ( %s ) tmp" % (query_sql.replace(";", ""),)
+        sql = "SELECT top 1 * from ( %s ) tmp" % (query_sql.replace(";", ""),)
         try:
-            cursor.execute("SET SHOWPLAN_ALL ON")
-            cursor.execute(query_sql)
+            #cursor.execute("SET NOEXEC ON")
+            cursor.execute(sql)
         except Exception, e:
             raise Exception(str(e.args))
         finally:
-            cursor.execute("SET SHOWPLAN_ALL OFF")
+            #cursor.execute("SET NOEXEC OFF")
+            cursor.close()
 
 
     # 获取表的列信息
@@ -297,12 +306,66 @@ class ReaderSqlserver(ReaderBase):
 
         r = cursor.fetchall()
         cursor.close()
-        if not r:
-            return None
 
         ret = []
         if r:
             for item in r:
                 ret.append(item[0])
+
+        return ret
+
+    # 获取表的字段注释
+    def __query_table_column_remarks(self, table_name, model_name):
+        cursor = self._connection.cursor()
+        sql = '''
+                SELECT a.name AS COLUMN_NAME,CONVERT(nvarchar(50),ISNULL(g.[value], '')) AS REMARKS FROM sys.columns a
+				LEFT JOIN sys.extended_properties g ON ( a.object_id = g.major_id AND g.minor_id = a.column_id )
+				WHERE object_id = (SELECT object_id FROM sys.tables st INNER JOIN INFORMATION_SCHEMA.TABLES t on st.name=t.TABLE_NAME 
+				WHERE	st.name = '%s' and t.TABLE_SCHEMA='%s')
+        ''' % (table_name, model_name)
+
+        try:
+            cursor.execute(sql)
+        except pymssql.OperationalError, e:
+            self.connect()
+            cursor = self._connection.cursor()
+            cursor.execute(sql)
+        except Exception, e:
+            raise Exception(str(e.args))
+
+        r = cursor.fetchall()
+        cursor.close()
+
+        ret = {}
+        if r:
+            for item in r:
+                ret[item[0]] = item[1]
+
+        return ret
+
+    # 获取表的注释
+    def __query_table_remarks(self, model_name):
+        cursor = self._connection.cursor()
+        sql = '''
+                SELECT t.TABLE_NAME as TABLE_NAME,	t.TABLE_TYPE as TABLE_TYPE,	CONVERT(nvarchar(50),ISNULL(g.[value], '')) as COMMENTS  
+        		FROM INFORMATION_SCHEMA.TABLES t LEFT JOIN sysobjects d on t.TABLE_NAME = d.name 
+        		LEFT JOIN sys.extended_properties g on g.major_id=d.id and g.minor_id='0' where t.TABLE_SCHEMA='%s'
+        		''' % model_name
+        try:
+            cursor.execute(sql)
+        except pymssql.OperationalError, e:
+            self.connect()
+            cursor = self._connection.cursor()
+            cursor.execute(sql)
+        except Exception, e:
+            raise Exception(str(e.args))
+
+        r = cursor.fetchall()
+        cursor.close()
+
+        ret = {}
+        if r:
+            for item in r:
+                ret[item[0]] = item[2]
 
         return ret

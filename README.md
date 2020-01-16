@@ -133,6 +133,7 @@
 | data | list | 数据列表 | 返回的列表 |
 | table_name | string | 表名称 | 表或视图的英文名称 |
 | table_type | string | 表类型 | 当表为物理表时标记为table;当表为视图表时标记为view |
+| remarks | string | 注释信息 | null;空字符串; 普通字符串|
 
 **Response Example:**
 
@@ -141,11 +142,13 @@
     "data":[                     
 		{
 			"table_type": "table",   
-			"table_name": "test_world" 
+			"table_name": "test_world",
+			"remarks": "测试用表"
 		},
 		{
 			"table_type": "view",
-			"table_name": "v_test"
+			"table_name": "v_test",
+			"remarks": null
 		}
     ],
     "errcode":0,            
@@ -209,6 +212,11 @@
 | precision | integer | Number precision | Number precision |
 | scale | integer | Number scale | Number scale  |
 | internal_size | integer | 内部字节大小 | 内部字节大小 |
+| remarks | string | 注释信息 | null;空字符串; 普通字符串|
+| metadata | Object | 表元信息 | 表元信息对象 |
+| table_name | string | 表名称 | 表或视图的英文名称 |
+| table_type | string | 表类型 | 当表为物理表时标记为table;当表为视图表时标记为view |
+| remarks | string | 注释信息 | null;空字符串; 普通字符串|
 
  **Response Example:**
  
@@ -222,6 +230,7 @@
         "columns": [
             {
                 "scale": 0,
+				"remarks": "编号",
                 "name": "id",
                 "nullable": 0,
                 "type": "NUMBER",
@@ -231,6 +240,7 @@
             },
             {
                 "scale": null,
+				"remarks": "键名",
                 "name": "name",
                 "nullable": 1,
                 "type": "NVARCHAR2",
@@ -240,6 +250,7 @@
             },
             {
                 "scale": null,
+				"remarks": "键值",
                 "name": "value",
                 "nullable": 1,
                 "type": "NVARCHAR2",
@@ -248,6 +259,11 @@
                 "internal_size": 1020
             }
         ]
+        "metadata": {
+            "remarks": "性别代码表",
+            "table_type": "table",
+            "table_name": "C_SEX"
+        }
     },
     "errcode": 0,
     "errmsg": "ok"

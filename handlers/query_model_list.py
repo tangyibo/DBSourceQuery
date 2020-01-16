@@ -66,6 +66,9 @@ class QueryModelListHandler(BaseHandler):
         reader.connect()
         try:
             lists = reader.get_model_lists()
+        except Exception as e:
+            logger.exception(e)
+            raise e
         finally:
             reader.close()
 
