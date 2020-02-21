@@ -39,7 +39,7 @@ class ReaderOracle(ReaderBase):
         try:
             tns = cx_Oracle.makedsn(self.host, self.port, sid=self.dbname)
             self._connection = cx_Oracle.connect(self.username, self.password, tns, encoding="UTF-8", nencoding="UTF-8")
-        except cx_Oracle.OperationalError, e:
+        except cx_Oracle.Error as e:
             try:
                 tns = cx_Oracle.makedsn(self.host, self.port, service_name=self.dbname)
                 self._connection = cx_Oracle.connect(self.username, self.password, tns, encoding="UTF-8", nencoding="UTF-8")
